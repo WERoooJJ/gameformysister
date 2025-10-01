@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Alteya Dog Clicker</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Comic Sans MS', cursive;
+      background: linear-gradient(to right, #8e44ad, #c445b2);
+      color: white;
+      text-align: center;
+    }
+    h1 { margin-top: 20px; }
+    #loginScreen, #gameScreen, #inventory, #market {
+      display: none;
+    }
+    .active { display: block !important; }
+    input, button {
+      padding: 10px;
+      margin: 5px;
+      border-radius: 10px;
+      border: none;
+    }
+    button {
+      background: white;
+      color: #8e44ad;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    #dog {
+      width: 200px;
+      height: 200px;
+      margin: 20px auto;
+      background-size: cover;
+      background-position: center;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    #case {
+      width: 120px;
+      height: 120px;
+      margin: 10px auto;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      background-image: url('https://i.imgur.com/B3eUOYr.png');
+      cursor: pointer;
+    }
+    #roulette {
+      display: flex;
+      overflow: hidden;
+      margin: 10px auto;
+      width: 80%;
+      height: 130px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 10px;
+      justify-content: flex-start;
+    }
+    .roll-item {
+      width: 100px;
+      height: 100px;
+      background-size: cover;
+      background-position: center;
+      margin: 10px;
+      border-radius: 10px;
+    }
+    #inventoryList img {
+      width: 100px;
+      margin: 5px;
+      cursor: pointer;
+      border-radius: 5px;
+      border: 2px solid transparent;
+    }
+    #inventoryList img.selected {
+      border-color: gold;
+    }
+    @keyframes clickAnimation {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.85); }
+  100% { transform: scale(1); }
+}
+
+#dog.clicked {
+  animation: clickAnimation 0.2s ease;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+#case.spinning {
+  animation: spin 2s linear;
+}
+@keyframes fall {
+  0% { top: -50px; opacity: 0; }
+  30% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.coin {
+  width: 40px;
+  height: 40px;
+  position: absolute;
+  background: url('https://i.imgur.com/b4AlRZi.jpeg') no-repeat center;
+  background-size: cover;
+  animation: fall 3s linear forwards;
+  cursor: pointer;
+}
+
+#expensiveCase {
+  width: 120px;
+  height: 120px;
+  margin: 10px auto;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-image: url('https://i.imgur.com/EpQv3QW.png'); /* картинка нового кейса */
+  cursor: pointer;
+}
+
+#expensiveCase.spinning {
+  animation: spin 1s linear infinite;
+  filter: brightness(1.2);
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+  </style>
+</head>
+<body>
+  <div id="loginScreen" class="active">
+    <h1>Alteya</h1>
+    <input type="text" id="username" placeholder="Имя" /><br />
+    <input type="password" id="password" placeholder="Пароль" /><br />
+    <button onclick="login()">Войти</button>
+  </div>
+
+  <div id="gameScreen">
+  <h2>Добро пожаловать, <span id="playerName"></span>!</h2>
+  
+  <div id="dog" onclick="handleClick()"></div>
+  
+  <p><strong>BTC:</strong> <span id="coins">0.000000</span></p>
+  
+  <div id="case" onclick="openCase()"></div>
+  <p id="casePrice">Цена обычного кейса: <span id="normalCasePrice">0.000000</span> BTC</p>
+  
+  <div id="expensiveCase" onclick="openExpensiveCase()"></div>
+  <p id="expensiveCasePrice">Цена дорогого кейса: <span id="expCasePrice"></span>–<span id="expCaseMaxPrice">6000</span> BTC</p>
+  
+  <p id="timer">Обновление цены через: <span id="timeLeft">600</span> сек.</p>
+  
+  <button onclick="toggleInventory()">Инвентарь</button>
+  
+  <div id="roulette"></div>
+
+<button id="hackBtn" onclick="startHack()" style="position:absolute; top:10px; right:10px; z-index:10;">💻 HACK</button>
+
+</div>
+
+  <div id="inventory">
+    <h2>Инвентарь</h2>
+    <div id="inventoryList"></div>
+    <button onclick="toggleInventory()">Назад</button>
+    <button onclick="toggleMarket()">Магазин</button>
+  </div>
+  <div id="market" style="display:none;">
+  <h2>Магазин питомцев</h2>
+  <div id="marketList"></div>
+  <button onclick="toggleMarket()">Назад</button>
+</div>
+<button id="mineGameBtn" onclick="startMiniMine()">⛏️ Майнить Монетки</button>
+  <p id="mineCooldownText"></p>
+
+  <div id="miniGame" style="display:none; position:relative; width:100%; height:300px; background:#111; border-radius:10px; margin:10px auto; overflow:hidden;">
+    <p style="color:white; margin-top:10px;">Лови монетки! ⏳</p>
+  </div>
+
+  <div id="roulette"></div>
+</div>
+  <script>
+
+
+    let users = JSON.parse(localStorage.getItem("users")) || {};
+    let currentUser = null;
+    let coins = 0;
+    let inventory = [];
+    let activeDog = 0;
+    let casePrice = getRandomPrice();
+    let caseTimer = 600;
+    let clickCooldown = false;
+
+    const dogs = [
+  { name: "Бублик", url: "https://i.imgur.com/OF5FF1l.png", click: 0.020, delay: 1000, rarity: "common" },
+  { name: "РодяГав", url: "https://i.imgur.com/8bztSq9.png", click: 0.060, delay: 3000, rarity: "common" },
+  { name: "Бар-Бос", url: "https://i.imgur.com/zJjQPnK.png", click: 0.099, delay: 2000, rarity: "rare" },
+  { name: "Инопришеленец", url: "https://i.imgur.com/jCQzDFW.jpeg", click: 0.190, delay: 2000, rarity: "rare" },
+  { name: "Бизнесгав", url: "https://i.imgur.com/ajRjkv6.jpeg", click: 0.230, delay: 2000, rarity: "rare" },
+  { name: "Пончик", url: "https://i.imgur.com/UUc8udX.png", click: 0.290, delay: 2000, rarity: "rare" },
+  { name: "Умный-Пес", url: "https://i.imgur.com/x3i8JSb.png", click: 0.300, delay: 1800, rarity: "rare" },
+  { name: "Сладуси", url: "https://i.imgur.com/zWRiW1b.jpeg", click: 0.270, delay: 2000, rarity: "rare" },
+  { name: "Ба", url: "https://i.imgur.com/fRLKYuD.jpeg", click: 0.250, delay: 2000, rarity: "rare" },
+  { name: "Виноградик-Гафик", url: "https://i.imgur.com/B74cMaz.png", click: 0.260, delay: 2000, rarity: "rare" },
+  { name: "ЛуиГучиГав", url: "https://i.imgur.com/ZFdIz3R.jpeg", click: 0.480, delay: 1500, rarity: "mythic" },
+  { name: "ШпиоГав", url: "https://i.imgur.com/QsYyhp9.png", click: 0.550, delay: 1500, rarity: "mythic" },
+  { name: "Пес-Геймер", url: "https://i.imgur.com/BgH4oW3.jpeg", click: 0.600, delay: 1300, rarity: "mythic" },
+  { name: "Пицца-Пес", url: "https://i.imgur.com/nqaiwsg.png", click: 0.600, delay: 1400, rarity: "mythic" },
+  { name: "Перситяф", url: "https://i.imgur.com/2rjngw5.png", click: 0.650, delay: 1300, rarity: "mythic" },
+  { name: "AI-Гав", url: "https://i.imgur.com/431ynxa.jpeg", click: 0.990, delay: 1200, rarity: "mythic" },
+  { name: "Золотой-гав", url: "https://i.imgur.com/BA3ceGt.jpeg", click: 0.780, delay: 980, rarity: "legendary" },
+  { name: "HACKER GAV 001", url: "https://i.imgur.com/hnJ9VTd.jpeg", click: 0.880, delay: 900, rarity: "legendary" },
+  { name: "Тяфик", url: "https://i.imgur.com/RO36DmY.png", click: 0.950, delay: 850, rarity: "legendary" },
+  { name: "Гав-единорог", url: "https://i.imgur.com/eBtH3W7.jpeg", click: 0.950, delay: 850, rarity: "legendary" },
+  { name: "Цветочный-Гав", url: "https://i.imgur.com/TfyyCb5.jpeg", click: 1.100, delay: 820, rarity: "legendary" },
+  { name: "Ролекс-Гав", url: "https://i.imgur.com/J3QTZat.png", click: 1.000, delay: 850, rarity: "legendary" },
+  { name: "Ушастый-Разноцвет", url: "https://i.imgur.com/QC4DAdv.jpeg", click: 0.982, delay: 500, rarity: "secret" },
+  { name: "Тяфик-Ангел", url: "https://i.imgur.com/2XJbHG7.png", click: 1.200, delay: 400, rarity: "secret" },
+  { name: "ЗвездаПес", url: "https://i.imgur.com/lAbuNWh.jpeg", click: 1.300, delay: 700, rarity: "secret" },
+  { name: "Крипто-песик", url: "https://i.imgur.com/XwLOphA.jpeg", click: 2.000, delay: 500, rarity: "secret" },
+  { name: "КовГав", url: "https://i.imgur.com/noHqks6.png", click: 1.600, delay: 800, rarity: "secret" },
+  { name: "Пельме-Тяф", url: "https://i.imgur.com/OT6ViWZ.png", click: 1.500, delay: 800, rarity: "secret" },
+  { name: "Космический-Черныш", url: "https://i.imgur.com/lZLbnyU.png", click: 2.800, delay: 500, rarity: "ultrasecret" },
+  { name: "Хот-Гав", url: "https://i.imgur.com/gCpN6fD.png", click: 2.900, delay: 500, rarity: "ultrasecret" },
+  { name: "Пустой", url: "https://i.imgur.com/2xIBKiP.png", click: 0, delay: 1000, rarity: "none" }
+
+
+];
+
+
+    function saveProgress() {
+      if (currentUser) {
+        users[currentUser] = {
+          password: users[currentUser].password,
+          coins,
+          inventory,
+          activeDog
+        };
+        localStorage.setItem("users", JSON.stringify(users));
+      }
+    }
+
+    function getRandomPrice() {
+  return +(Math.random() * (1200 - 400) + 170).toFixed(6);
+}
+
+    function updateCoins() {
+  document.getElementById("coins").textContent = coins.toFixed(6);
+  saveProgress();
+}
+
+    function login() {
+      const name = document.getElementById("username").value.trim();
+      const pass = document.getElementById("password").value.trim();
+      if (!name || !pass) return alert("Введите имя и пароль");
+
+      if (!users[name]) {
+        users[name] = {
+          password: pass,
+          coins: 0,
+          inventory: [0],
+          activeDog: 0
+        };
+      } else if (users[name].password !== pass) {
+        return alert("Неверный пароль");
+      }
+
+      currentUser = name;
+      coins = users[name].coins;
+      inventory = users[name].inventory;
+      activeDog = users[name].activeDog;
+
+      document.getElementById("playerName").textContent = currentUser;
+      setDog(activeDog);
+      updateCoins();
+      updateCasePrice();
+      setInterval(updateTimer, 1000);
+
+      document.getElementById("loginScreen").classList.remove("active");
+      document.getElementById("gameScreen").classList.add("active");
+    }
+
+    function setDog(index) {
+      activeDog = index;
+      document.getElementById("dog").style.backgroundImage = `url('${dogs[index].url}')`;
+      saveProgress();
+    }
+
+    function handleClick() {
+  if (clickCooldown) return;
+
+  // 💥 Анимация собачки
+  const dogEl = document.getElementById("dog");
+  dogEl.classList.add("clicked");
+  setTimeout(() => dogEl.classList.remove("clicked"), 200);
+
+  // 💰 Начисление BTC
+  coins += dogs[activeDog].click;
+  updateCoins();
+  clickCooldown = true;
+  setTimeout(() => (clickCooldown = false), dogs[activeDog].delay);
+}
+
+    function updateCasePrice() {
+      document.getElementById("casePrice").textContent = `Цена кейса: ${casePrice.toFixed(6)} BTC`;
+    }
+
+    function updateTimer() {
+      caseTimer--;
+      if (caseTimer <= 0) {
+        caseTimer = 600;
+        casePrice = getRandomPrice();
+        updateCasePrice();
+      }
+      document.getElementById("timeLeft").textContent = caseTimer;
+    }
+
+    function openCase() {
+  if (coins < casePrice) return alert("Недостаточно BTC");
+
+  coins -= casePrice;
+  updateCoins();
+
+  const caseEl = document.getElementById("case");
+  caseEl.style.backgroundImage = "url('https://i.imgur.com/SBeNqUx.jpeg')";
+  caseEl.classList.add("spinning");
+
+  setTimeout(() => {
+    caseEl.classList.remove("spinning");
+    caseEl.style.backgroundImage = "url('https://i.imgur.com/B3eUOYr.png')"; // вернуть обычную картинку
+
+    // Вычисление выпавшей собачки
+   let roll = Math.random();
+let dogIndex =
+  roll < 0.12   ? 0  :   // Начальная — 12%
+  roll < 0.22   ? 1  :   // Common — 10%
+  roll < 0.27   ? 2  :   // Rare1 — 7%
+  roll < 0.35   ? 3  :   // Rare2 — 6%
+  roll < 0.40   ? 4  :   // Rare3 — 5%
+  roll < 0.45   ? 5  :   // Rare4 — 5%
+  roll < 0.49   ? 6  :   // Rare5 — 4%
+  roll < 0.53   ? 7  :   // Rare6 — 4%
+  roll < 0.57   ? 8  :   // Rare7 — 4%
+  roll < 0.60   ? 9  :   // Mythic — 3%
+  roll < 0.63   ? 10 :   // Mythic2 — 3%
+  roll < 0.66   ? 11 :   // Mythic3 — 3%
+  roll < 0.69   ? 12 :   // Mythic4 — 3%
+  roll < 0.72   ? 13 :   // Mythic5 — 3%
+  roll < 0.74   ? 14 :   // Legendary — 2%
+  roll < 0.76   ? 15 :   // Legendary2 — 2%
+  roll < 0.78   ? 16 :   // Legendary3 — 2%
+  roll < 0.80   ? 17 :   // Legendary4 — 2%
+  roll < 0.81   ? 18 :   // Legendary5 — 1%
+  roll < 0.82   ? 19 :   // Secret — 1%
+  roll < 0.83   ? 20 :   // Secret2 — 1%
+  roll < 0.84   ? 21 :   // Secret3 — 1%
+  roll < 0.8401 ? 22 :   //  — 0.01%
+           0;            // Фолбэк (безопасность)
+
+
+    inventory.push(dogIndex);
+    saveProgress();
+    renderRoulette(dogIndex);
+  }, 2000);
+}
+
+    function renderRoulette(dogIndex) {
+      const r = document.getElementById("roulette");
+      r.innerHTML = "";
+      for (let i = 0; i < 20; i++) {
+        const d = document.createElement("div");
+        let index = Math.floor(Math.random() * dogs.length);
+        d.className = "roll-item";
+        d.style.backgroundImage = `url('${dogs[index].url}')`;
+        r.appendChild(d);
+      }
+
+      const won = document.createElement("div");
+      won.className = "roll-item";
+      won.style.backgroundImage = `url('${dogs[dogIndex].url}')`;
+      r.appendChild(won);
+
+      setTimeout(() => {
+        alert("Вам выпала: " + dogs[dogIndex].name);
+        r.innerHTML = "";
+      }, 3000);
+    }
+
+    function toggleInventory() {
+  const inv = document.getElementById("inventory");
+  inv.classList.toggle("active");
+  const list = document.getElementById("inventoryList");
+  list.innerHTML = "";
+  inventory.forEach((idx, i) => {
+    const container = document.createElement("div");
+    container.style.marginBottom = "10px";
+
+    const img = document.createElement("img");
+    img.src = dogs[idx].url;
+    img.onclick = () => {
+      setDog(idx);
+      users[currentUser].activeDog = idx;
+      saveProgress();
+    };
+    if (idx === activeDog) img.classList.add("selected");
+    container.appendChild(img);
+
+
+    list.appendChild(container);
+  });
+}
+
+let mineCooldown = false;
+
+function startMiniMine() {
+  if (mineCooldown) {
+    alert("Перезарядка! Подожди 60 секунд.");
+    return;
+  }
+
+  mineCooldown = true;
+  document.getElementById("mineGameBtn").disabled = true;
+  document.getElementById("miniGame").style.display = "block";
+  document.getElementById("dog").style.display = "none";
+  document.getElementById("case").style.display = "none";
+
+  const container = document.getElementById("miniGame");
+  container.innerHTML = '<p style="color:white; margin-top:10px;">Лови монетки! ⏳</p>';
+
+  const spawnInterval = setInterval(() => {
+    const coin = document.createElement("div");
+    coin.className = "coin";
+    coin.style.left = Math.random() * (container.offsetWidth - 40) + "px";
+    coin.onclick = () => {
+      const value = +(Math.random() * (10.99999 - 0.9) + 0.9).toFixed(5);
+      coins += value;
+      updateCoins();
+      coin.remove();
+    };
+    container.appendChild(coin);
+    setTimeout(() => coin.remove(), 3000);
+  }, 400);
+
+  setTimeout(() => {
+    clearInterval(spawnInterval);
+    container.innerHTML = '';
+    container.style.display = "none";
+    document.getElementById("dog").style.display = "block";
+    document.getElementById("case").style.display = "block";
+    startCooldownTimer();
+  }, 15000);
+}
+
+function startCooldownTimer() {
+  let cooldown = 60;
+  const text = document.getElementById("mineCooldownText");
+  text.textContent = `Следующая мини-игра через ${cooldown} сек.`;
+
+  const interval = setInterval(() => {
+    cooldown--;
+    text.textContent = `Следующая мини-игра через ${cooldown} сек.`;
+    if (cooldown <= 0) {
+      clearInterval(interval);
+      text.textContent = "";
+      mineCooldown = false;
+      document.getElementById("mineGameBtn").disabled = false;
+    }
+  }, 1000);
+}
+  let shopPrices = [];
+let marketTimer = null;
+
+function getPriceForRarity(rarity) {
+  if (rarity === "common") return +(Math.random() * (40 - 8) + 12).toFixed(5);
+  if (rarity === "rare") return +(Math.random() * (340 - 120) + 120).toFixed(5);
+  if (rarity === "mythic") return +(Math.random() * (920 - 559) + 559).toFixed(5);
+  if (rarity === "legendary") return +(Math.random() * (7800 - 3200) + 1999).toFixed(5);
+  if (rarity === "secret") return +(Math.random() * (48000 - 11000) + 7000).toFixed(5);
+  if (rarity === "ultrasecret") return +(Math.random() * (210000 - 97000) + 9800).toFixed(5);
+  return 0;
+}
+function updateShopPrices() {
+  shopPrices = dogs.map(dog => getPriceForRarity(dog.rarity));
+  renderMarket();
+}
+
+function renderMarket() {
+  const market = document.getElementById("marketList");
+  market.innerHTML = "";
+
+  dogs.forEach((dog, i) => {
+    const owned = inventory.includes(i);
+    const price = shopPrices[i];
+    const box = document.createElement("div");
+    box.style = "border:1px solid white;padding:10px;margin:10px;border-radius:10px;background:#222;";
+    box.innerHTML = `
+      <img src="${dog.url}" width="100"><br>
+      <b>${dog.name}</b><br>
+      <small>${dog.rarity}</small><br>
+      <p>Цена: ${price.toFixed(5)} BTC</p>
+      <button onclick="${owned ? `sellDog(${i})` : `buyDog(${i})`}">
+        ${owned ? "Продать (−30%)" : "Купить"}
+      </button>
+    `;
+    market.appendChild(box);
+  });
+}
+
+function buyDog(index) {
+  const price = shopPrices[index];
+  if (coins < price) return alert("Недостаточно BTC");
+  if (inventory.includes(index)) return alert("У тебя уже есть этот пёс");
+
+  coins -= price;
+  inventory.push(index);
+  updateCoins();
+  saveProgress();
+  renderMarket();
+}
+
+function sellDog(index) {
+  const price = shopPrices[index] * 0.7;
+  inventory = inventory.filter(i => i !== index);
+  coins += price;
+
+  // Если продаем активного пса — сброс на пустого
+  if (activeDog === index) {
+    activeDog = 30; // индекс пустого пса
+    setDog(30);
+  }
+
+  updateCoins();
+  saveProgress();
+}
+
+function toggleMarket() {
+  const market = document.getElementById("market");
+  market.classList.toggle("active");
+
+  if (market.classList.contains("active")) {
+    updateShopPrices();
+    marketTimer = setInterval(updateShopPrices, 10000);
+  } else {
+    clearInterval(marketTimer);
+  }
+}
+
+function showHackAlert() {
+  if (!currentUser) return;
+
+  const el = document.getElementById("hackAlert");
+  const taskEl = document.getElementById("hackTask");
+  const inputEl = document.getElementById("hackInput");
+  const timerEl = document.getElementById("hackCountdown");
+
+  const a = Math.floor(Math.random() * 10) + 1;
+  const b = Math.floor(Math.random() * 10) + 1;
+  const op = Math.random() > 0.5 ? "+" : "-";
+  const correctAnswer = op === "+" ? a + b : a - b;
+
+  taskEl.textContent = `Реши: ${a} ${op} ${b}`;
+  inputEl.value = "";
+  el.style.display = "flex";
+
+  let timeLeft = 5;
+  timerEl.textContent = timeLeft;
+
+  const timer = setInterval(() => {
+    timeLeft--;
+    timerEl.textContent = timeLeft;
+    if (timeLeft <= 0) {
+      clearInterval(timer);
+      finishHack(false);
+    }
+  }, 1000);
+
+  inputEl.onkeydown = (e) => {
+    if (e.key === "Enter") {
+      clearInterval(timer);
+      const userAnswer = Number(inputEl.value);
+      finishHack(userAnswer === correctAnswer);
+    }
+  };
+
+  function finishHack(success) {
+    el.style.display = "none";
+    if (success) {
+      coins += 10;
+      updateCoins();
+      alert("✅ Успешно! +10 BTC");
+    } else {
+      if (inventory.length > 1) {
+        const removeIndex = Math.floor(Math.random() * inventory.length);
+        const removed = inventory.splice(removeIndex, 1)[0];
+        alert("❌ Пёсик " + dogs[removed].name + " был украден!");
+        if (activeDog === removed) {
+          activeDog = 31;
+          setDog(31);
+        }
+        saveProgress();
+      } else {
+        alert("❌ Пёсик не был украден, потому что у тебя остался только один.");
+      }
+    }
+  }
+}
+
+function randomHackLoop() {
+  const nextTime = Math.random() * (10 - 3) * 60 * 1000 + 3 * 60 * 1000;
+  setTimeout(() => {
+    showHackAlert();
+    randomHackLoop();
+  }, nextTime);
+}
+randomHackLoop();
+
+function openExpensiveCase() {
+  if (coins < 2500) return alert("Недостаточно BTC для дорогого кейса!");
+
+  const price = Math.floor(Math.random() * (6000 - 2500 + 1)) + 2500;
+  coins -= price;
+  updateCoins();
+
+  const caseEl = document.getElementById("expensiveCase");
+  caseEl.classList.add("spinning");
+
+  setTimeout(() => {
+    caseEl.classList.remove("spinning");
+
+    const roll = Math.random();
+    let dogIndex =
+      roll < 0.005  ? 26 : // Космический-Черныш (ультра секретный)
+      roll < 0.010  ? 27 : // Хот-Гав (ультра секретный)
+      roll < 0.020  ? 25 : // КовГав (секретный)
+      roll < 0.080  ? 15 + Math.floor(Math.random() * 6) : // 6 легендарных (15–20)
+                      10 + Math.floor(Math.random() * 5); // 5 мификов (10–14)
+
+    inventory.push(dogIndex);
+    alert("🎉 Вы получили нового пса: " + dogs[dogIndex].name);
+    saveProgress();
+    renderRoulette(dogIndex);
+  }, 1000);
+}
+
+let hackCooldown = false;
+
+function startHack() {
+  if (hackCooldown) return;
+
+  const btn = document.getElementById("hackBtn");
+  btn.disabled = true;
+  btn.textContent = "⏳ 5 сек...";
+
+  setTimeout(() => {
+    const success = Math.random() < 0.4;
+
+    if (success) {
+      coins += 200;
+      alert("✅ Успешно! +200 BTC");
+    } else {
+      coins = Math.max(0, coins - 5);
+      alert("❌ Не успешно! -5 BTC");
+    }
+
+    updateCoins();
+    hackCooldown = true;
+
+    let cd = 120; // 2 минуты (120 сек)
+    const interval = setInterval(() => {
+      cd--;
+      btn.textContent = `💻 HACK (${cd} сек)`;
+      if (cd <= 0) {
+        clearInterval(interval);
+        btn.textContent = "💻 HACK";
+        btn.disabled = false;
+        hackCooldown = false;
+      }
+    }, 1000);
+  }, 5000);
+}
+
+</script>
+<div id="hackAlert" style="
+  display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+  background:black;z-index:9999;justify-content:center;align-items:center;
+  flex-direction:column;color:red;font-size:28px;font-weight:bold;
+  text-shadow:0 0 10px red;font-family:monospace;">
+  ⚠️ ВНИМАНИЕ! ВАС ВЗЛАМЫВАЮТ!
+  <p id="hackTask" style="margin-top:20px;"></p>
+  <input id="hackInput" type="number" style="padding:10px;font-size:24px;">
+  <p id="hackCountdown" style="margin-top:10px;">5</p>
+</div>
+
+</body>
+</html>
+
+	
